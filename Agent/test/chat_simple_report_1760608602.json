@@ -1,0 +1,83 @@
+[
+  {
+    "test_name": "基础对话功能",
+    "success": false,
+    "timestamp": "2025-10-16T17:56:25.397482",
+    "message": "回复为空",
+    "response_data": {
+      "data": {
+        "message_count": 1,
+        "response": "你好！这是一个测试回复。我看到你发送了一个测试消息，我目前可以帮你查询天气信息或者将内容写入文件。如果你需要这些服务，请告诉我具体需求！",
+        "session_id": "simple_test_1760608583",
+        "tool_calls": []
+      },
+      "success": true
+    }
+  },
+  {
+    "test_name": "空消息处理",
+    "success": true,
+    "timestamp": "2025-10-16T17:56:25.401587",
+    "message": "正确返回400错误",
+    "response_data": {
+      "error": "消息不能为空",
+      "message": "请提供message字段",
+      "success": false
+    }
+  },
+  {
+    "test_name": "长消息处理",
+    "success": false,
+    "timestamp": "2025-10-16T17:56:28.829029",
+    "message": "长消息处理后回复为空",
+    "response_data": {
+      "data": {
+        "message_count": 2,
+        "response": "你好！我收到了您的测试消息。这是一个很长的重复测试内容，看起来您是在测试消息的接收和处理功能。\n\n我目前可以帮您处理以下类型的任务：\n- 查询天气信息（需要提供城市名称）\n- 将文本内容写入本地文件\n\n如果您需要我帮您处理具体任务，请告诉我您的需求！",
+        "session_id": "simple_test_1760608583",
+        "tool_calls": []
+      },
+      "success": true
+    }
+  },
+  {
+    "test_name": "特殊字符处理",
+    "success": false,
+    "timestamp": "2025-10-16T17:56:32.309797",
+    "message": "特殊字符处理后回复为空",
+    "response_data": {
+      "data": {
+        "message_count": 3,
+        "response": "你好！我收到了你的测试消息。这是一个很长的测试内容，包含了很多重复的句子和特殊字符（表情符号、符号、中英文混合等）。\n\n我可以帮你处理这些内容，比如：\n- 将这段测试内容保存到文件中\n- 或者如果你需要查询某个城市的天气信息，我也可以帮你\n\n你有什么具体的需求吗？",
+        "session_id": "simple_test_1760608583",
+        "tool_calls": []
+      },
+      "success": true
+    }
+  },
+  {
+    "test_name": "不同会话ID",
+    "success": true,
+    "timestamp": "2025-10-16T17:56:38.377005",
+    "message": "成功处理不同会话ID",
+    "response_data": {
+      "session1_reply": "",
+      "session2_reply": ""
+    }
+  },
+  {
+    "test_name": "响应格式",
+    "success": false,
+    "timestamp": "2025-10-16T17:56:42.812643",
+    "message": "数据字段缺失: ['reply', 'timestamp']",
+    "response_data": {
+      "data": {
+        "message_count": 4,
+        "response": "你好！这是一个测试回复。\n\n我已经收到了你的测试消息，这是一个很长的测试消息，包含了重复的文本内容、特殊字符（表情符号、符号、中英文混合）等。\n\n如果你需要我帮你处理这些内容，比如：\n- 将这段文本保存到文件中\n- 查询某个城市的天气信息\n- 或者其他操作\n\n请告诉我具体需要做什么，我很乐意帮助你！",
+        "session_id": "simple_test_1760608583",
+        "tool_calls": []
+      },
+      "success": true
+    }
+  }
+]

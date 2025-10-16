@@ -1,0 +1,78 @@
+[
+  {
+    "test_name": "基础对话功能",
+    "success": true,
+    "timestamp": "2025-10-16T18:01:10.708561",
+    "message": "收到回复: 你好！这是一个测试回复。我看到你发送了一个测试消息，我目前可以帮你查询天气信息和将内容写入本地文件。...",
+    "response_data": {
+      "message_count": 1,
+      "reply": "你好！这是一个测试回复。我看到你发送了一个测试消息，我目前可以帮你查询天气信息和将内容写入本地文件。如果你需要这些服务，请告诉我具体需求！\n\n有什么我可以帮助你的吗？",
+      "session_id": "simple_test_1760608859",
+      "timestamp": "2025-10-16T18:01:10.706007",
+      "tool_calls": []
+    }
+  },
+  {
+    "test_name": "空消息处理",
+    "success": true,
+    "timestamp": "2025-10-16T18:01:10.712024",
+    "message": "正确返回400错误",
+    "response_data": {
+      "error": "消息不能为空",
+      "message": "请提供message字段",
+      "success": false
+    }
+  },
+  {
+    "test_name": "长消息处理",
+    "success": true,
+    "timestamp": "2025-10-16T18:01:13.103453",
+    "message": "成功处理长消息，回复长度: 79",
+    "response_data": {
+      "message_count": 2,
+      "reply": "你好！我收到了您的测试消息。这是一个很长的测试消息，内容重复了很多次。\n\n如果您需要我帮您处理这个测试消息，比如将其保存为文件，或者有其他具体需求，请告诉我！",
+      "session_id": "simple_test_1760608859",
+      "timestamp": "2025-10-16T18:01:13.101709",
+      "tool_calls": []
+    }
+  },
+  {
+    "test_name": "特殊字符处理",
+    "success": true,
+    "timestamp": "2025-10-16T18:01:16.918573",
+    "message": "成功处理特殊字符",
+    "response_data": {
+      "message_count": 3,
+      "reply": "你好！我收到了你的测试消息。这是一个很长的测试文本，包含了重复的句子、特殊表情符号、英文、中文和数字等各种字符。\n\n我可以帮你：\n- 查询天气信息（需要提供城市名称）\n- 将文本内容写入文件保存\n\n如果你需要我执行这些操作，请告诉我具体要做什么。",
+      "session_id": "simple_test_1760608859",
+      "timestamp": "2025-10-16T18:01:16.916728",
+      "tool_calls": []
+    }
+  },
+  {
+    "test_name": "不同会话ID",
+    "success": true,
+    "timestamp": "2025-10-16T18:01:21.180074",
+    "message": "成功处理不同会话ID",
+    "response_data": {
+      "session1_reply": "你好！欢迎来到会话1！我是你的AI助手，很高兴为你服务。\n\n",
+      "session2_reply": "你好！我是您的AI助手。我看到这是我们的第2次对话，很高兴继"
+    }
+  },
+  {
+    "test_name": "响应格式",
+    "success": true,
+    "timestamp": "2025-10-16T18:01:25.350900",
+    "message": "响应格式正确",
+    "response_data": {
+      "data": {
+        "message_count": 4,
+        "reply": "你好！我收到了你的测试消息。这是一个很长的测试内容，包含了重复的测试文本、特殊字符（如表情符号、符号、中英文混合）以及格式测试。\n\n我可以帮你处理以下类型的任务：\n- **查询天气信息** - 我可以查询指定城市的天气情况\n- **文件写入** - 我可以将文本内容写入本地文件\n\n如果你需要我执行具体的操作，请告诉我你的需求！",
+        "session_id": "simple_test_1760608859",
+        "timestamp": "2025-10-16T18:01:25.349324",
+        "tool_calls": []
+      },
+      "success": true
+    }
+  }
+]
