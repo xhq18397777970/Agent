@@ -1,0 +1,12 @@
+{
+    "mcpServers": {
+      "weather": {
+        "command": "python",
+        "args": ["weather_server.py"]
+      },
+      "write": {
+        "command": "python",
+        "args": ["write_server.py"]
+      }
+    }
+  }

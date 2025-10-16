@@ -1,0 +1,6 @@
+# Python 第三方依赖包
+httpx>=0.24.0
+python-dotenv>=1.0.0
+openai>=1.0.0
+mcp>=0.9.0
+fastmcp>=0.1.0
