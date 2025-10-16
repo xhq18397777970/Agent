@@ -5,7 +5,7 @@
 ## 环境要求
 
 ### 1. Python 版本
-- **Python 3.8+** （推荐 Python 3.9 或更高版本）
+- **Python 3.10+** （必须，MCP 包要求 Python 3.10 或更高版本）
 
 ### 2. 系统依赖
 - **操作系统**: Windows 10+, macOS 10.15+, 或 Linux

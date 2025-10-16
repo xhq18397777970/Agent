@@ -3,9 +3,10 @@ import json
 import logging
 import os
 import shutil
+import sys
 from contextlib import AsyncExitStack
 from typing import Any, Dict, List, Optional
- 
+
 import httpx
 from dotenv import load_dotenv
 from openai import OpenAI  # OpenAI Python SDK
@@ -21,31 +22,42 @@ logging.basicConfig(
 # =============================
 # 配置加载类（支持环境变量及配置文件）
 # =============================
+# 导入配置管理器
+sys.path.append(os.path.join(os.path.dirname(__file__), 'config'))
+from config_manager import get_config_manager
+
 class Configuration:
     """管理 MCP 客户端的环境变量和配置文件"""
  
     def __init__(self) -> None:
-        load_dotenv()
-        # 从环境变量中加载 DeepSeek API key, base_url 和 model
-        self.api_key = os.getenv("DEEPSEEK_API_KEY")
-        self.base_url = os.getenv("DEEPSEEK_BASE_URL")
-        self.model = os.getenv("DEEPSEEK_MODEL")
-        if not self.api_key:
-            raise ValueError("❌ 未找到 DEEPSEEK_API_KEY，请在 .env 文件中配置")
- 
-    @staticmethod
-    def load_config(file_path: str) -> Dict[str, Any]:
+        self.config_manager = get_config_manager()
+        
+        # 从配置管理器获取 DeepSeek 配置
+        try:
+            deepseek_config = self.config_manager.get_deepseek_config()
+            self.api_key = deepseek_config["api_key"]
+            self.base_url = deepseek_config["base_url"]
+            self.model = deepseek_config["model"]
+        except ValueError as e:
+            raise ValueError(f"❌ DeepSeek 配置错误: {e}")
+
+    def load_config(self, file_path: str = None) -> Dict[str, Any]:
         """
-        从 JSON 文件加载服务器配置
+        从配置管理器加载服务器配置
         
         Args:
-            file_path: JSON 配置文件路径
+            file_path: 配置文件路径（可选，兼容旧版本）
         
         Returns:
             包含服务器配置的字典
         """
-        with open(file_path, "r") as f:
-            return json.load(f)
+        if file_path:
+            # 兼容旧版本的文件路径方式
+            with open(file_path, "r") as f:
+                return json.load(f)
+        else:
+            # 使用配置管理器
+            return self.config_manager.load_servers_config()
  
  
 # =============================
@@ -58,20 +70,27 @@ class Server:
         self.name: str = name
         self.config: Dict[str, Any] = config
         self.session: Optional[ClientSession] = None
-        self.exit_stack: AsyncExitStack = AsyncExitStack()
+        self.exit_stack: Optional[AsyncExitStack] = None
         self._cleanup_lock = asyncio.Lock()
+        self._initialized = False
  
     async def initialize(self) -> None:
         """初始化与 MCP 服务器的连接"""
+        if self._initialized:
+            return
+            
         # command 字段直接从配置获取
         command = self.config["command"]
         if command is None:
             raise ValueError("command 不能为空")
  
+        # 创建新的 AsyncExitStack
+        self.exit_stack = AsyncExitStack()
+        
         server_params = StdioServerParameters(
             command=command,
             args=self.config["args"],
-            env={**os.environ, **self.config["env"]} if self.config.get("env") else None,
+            env={**os.environ, **self.config["env"]} if self.config.get("env") else os.environ,
         )
         try:
             stdio_transport = await self.exit_stack.enter_async_context(
@@ -83,6 +102,7 @@ class Server:
             )
             await session.initialize()
             self.session = session
+            self._initialized = True
         except Exception as e:
             logging.error(f"Error initializing server {self.name}: {e}")
             await self.cleanup()
@@ -138,11 +158,69 @@ class Server:
     async def cleanup(self) -> None:
         """清理服务器资源"""
         async with self._cleanup_lock:
+            if not self._initialized:
+                return
+                
+            # 标记为未初始化状态，防止重复清理
+            self._initialized = False
+            
+            try:
+                # 先清理session
+                if self.session:
+                    try:
+                        # 尝试优雅关闭session，但不等待太久
+                        await asyncio.wait_for(self.session.close(), timeout=0.5)
+                    except (asyncio.TimeoutError, AttributeError):
+                        # session可能没有close方法或已经关闭
+                        pass
+                    except Exception as e:
+                        logging.debug(f"Session cleanup warning for {self.name}: {e}")
+                    finally:
+                        self.session = None
+                    
+                # 清理exit_stack - 使用更保守的方法
+                if self.exit_stack:
+                    try:
+                        # 创建一个新的任务来处理清理，避免跨任务范围问题
+                        cleanup_task = asyncio.create_task(self._safe_exit_stack_cleanup())
+                        await asyncio.wait_for(cleanup_task, timeout=2.0)
+                    except asyncio.TimeoutError:
+                        logging.info(f"Exit stack cleanup timed out for server {self.name}")
+                        cleanup_task.cancel()
+                        try:
+                            await cleanup_task
+                        except asyncio.CancelledError:
+                            pass
+                    except Exception as e:
+                        error_msg = str(e).lower()
+                        if any(keyword in error_msg for keyword in ["cancel", "scope", "generatorexit", "different task"]):
+                            logging.debug(f"Ignoring expected async cleanup error for server {self.name}: {e}")
+                        else:
+                            logging.warning(f"Unexpected error during exit_stack cleanup of server {self.name}: {e}")
+                    finally:
+                        self.exit_stack = None
+                        
+            except Exception as e:
+                error_msg = str(e).lower()
+                if any(keyword in error_msg for keyword in ["cancel", "scope", "generatorexit", "different task"]):
+                    logging.debug(f"Ignoring expected async cleanup error during server {self.name} cleanup: {e}")
+                else:
+                    logging.error(f"Unexpected error during cleanup of server {self.name}: {e}")
+            finally:
+                # 确保状态被重置
+                self.session = None
+                self.exit_stack = None
+                self._initialized = False
+
+    async def _safe_exit_stack_cleanup(self) -> None:
+        """安全地清理exit_stack，在独立的任务中运行"""
+        if self.exit_stack:
             try:
                 await self.exit_stack.aclose()
-                self.session = None
             except Exception as e:
-                logging.error(f"Error during cleanup of server {self.name}: {e}")
+                error_msg = str(e).lower()
+                if not any(keyword in error_msg for keyword in ["cancel", "scope", "generatorexit", "different task"]):
+                    raise
  
  
 # =============================
@@ -418,30 +496,173 @@ class MultiServerMCPClient:
  
     async def cleanup(self) -> None:
         """关闭所有资源"""
-        await self.exit_stack.aclose()
+        logging.info("开始清理MCP客户端资源...")
+        
+        # 首先清理所有服务器，使用并发但有限制的方式
+        cleanup_tasks = []
+        for server_name, server in list(self.servers.items()):
+            task = asyncio.create_task(self._cleanup_single_server(server_name, server))
+            cleanup_tasks.append(task)
+        
+        # 等待所有服务器清理完成，但设置总体超时
+        if cleanup_tasks:
+            try:
+                await asyncio.wait_for(
+                    asyncio.gather(*cleanup_tasks, return_exceptions=True),
+                    timeout=5.0
+                )
+            except asyncio.TimeoutError:
+                logging.info("服务器清理超时，取消剩余任务")
+                for task in cleanup_tasks:
+                    if not task.done():
+                        task.cancel()
+                # 等待取消完成
+                await asyncio.gather(*cleanup_tasks, return_exceptions=True)
+        
+        # 清理主要的 exit_stack - 使用独立任务避免跨任务范围问题
+        if hasattr(self, 'exit_stack') and self.exit_stack:
+            try:
+                cleanup_task = asyncio.create_task(self._safe_main_exit_stack_cleanup())
+                await asyncio.wait_for(cleanup_task, timeout=2.0)
+            except asyncio.TimeoutError:
+                logging.info("主exit_stack清理超时")
+                cleanup_task.cancel()
+                try:
+                    await cleanup_task
+                except asyncio.CancelledError:
+                    pass
+            except Exception as e:
+                error_msg = str(e).lower()
+                if any(keyword in error_msg for keyword in ["cancel", "scope", "generatorexit", "different task"]):
+                    logging.debug(f"忽略预期的主清理异常: {e}")
+                else:
+                    logging.warning(f"主清理过程中的意外错误: {e}")
+        
+        # 清理状态
+        self.servers.clear()
+        self.tools_by_server.clear()
+        self.all_tools.clear()
+        logging.info("MCP客户端资源清理完成")
+
+    async def _cleanup_single_server(self, server_name: str, server) -> None:
+        """清理单个服务器"""
+        try:
+            logging.info(f"正在清理服务器: {server_name}")
+            await asyncio.wait_for(server.cleanup(), timeout=3.0)
+            logging.debug(f"服务器 {server_name} 清理成功")
+        except asyncio.TimeoutError:
+            logging.info(f"服务器 {server_name} 清理超时")
+        except Exception as e:
+            error_msg = str(e).lower()
+            if any(keyword in error_msg for keyword in ["cancel", "scope", "generatorexit", "subprocess", "different task"]):
+                logging.debug(f"忽略服务器 {server_name} 的预期清理异常: {e}")
+            else:
+                logging.warning(f"清理服务器 {server_name} 时出错: {e}")
+
+    async def _safe_main_exit_stack_cleanup(self) -> None:
+        """安全地清理主exit_stack"""
+        if hasattr(self, 'exit_stack') and self.exit_stack:
+            try:
+                await self.exit_stack.aclose()
+            except Exception as e:
+                error_msg = str(e).lower()
+                if not any(keyword in error_msg for keyword in ["cancel", "scope", "generatorexit", "different task"]):
+                    raise
  
  
 # =============================
 # 主函数
 # =============================
 async def main() -> None:
-    # 从配置文件加载服务器配置
-    config = Configuration()
-    servers_config = config.load_config("servers_config.json")
-    client = MultiServerMCPClient()
+    """主函数 - 改进的异常处理和资源清理"""
+    client = None
+    
     try:
+        # 使用配置管理器加载服务器配置
+        config = Configuration()
+        servers_config = config.load_config()  # 使用配置管理器
+        client = MultiServerMCPClient()
+        
+        # 连接服务器
         await client.connect_to_servers(servers_config)
+        
+        # 开始聊天循环
         await client.chat_loop()
+        
+    except KeyboardInterrupt:
+        logging.info("收到中断信号，正在退出...")
+    except Exception as e:
+        logging.error(f"程序运行出错: {e}")
+        import traceback
+        logging.debug(f"详细错误信息: {traceback.format_exc()}")
     finally:
-        try:
-            await asyncio.sleep(0.1)
-            await client.cleanup()
-        except RuntimeError as e:
-            # 如果是因为退出 cancel scope 导致的异常，可以选择忽略
-            if "Attempted to exit cancel scope" in str(e):
-                logging.info("退出时检测到 cancel scope 异常，已忽略。")
-            else:
-                raise
- 
+        # 资源清理 - 使用更健壮的方法
+        if client is not None:
+            logging.info("正在清理资源...")
+            
+            # 创建一个新的事件循环任务来处理清理，避免跨任务问题
+            cleanup_task = None
+            try:
+                # 给正在运行的任务一点时间完成
+                await asyncio.sleep(0.1)
+                
+                # 创建清理任务
+                cleanup_task = asyncio.create_task(client.cleanup())
+                
+                # 等待清理完成，设置合理的超时
+                await asyncio.wait_for(cleanup_task, timeout=8.0)
+                logging.info("资源清理完成")
+                
+            except asyncio.TimeoutError:
+                logging.info("资源清理超时，正在强制清理...")
+                if cleanup_task and not cleanup_task.done():
+                    cleanup_task.cancel()
+                    try:
+                        await cleanup_task
+                    except asyncio.CancelledError:
+                        logging.info("清理任务已取消")
+                        
+            except Exception as e:
+                # 处理各种可能的清理异常
+                error_msg = str(e).lower()
+                expected_errors = [
+                    "cancel", "scope", "generatorexit", "subprocess",
+                    "wait", "different task", "runtimeerror"
+                ]
+                
+                if any(keyword in error_msg for keyword in expected_errors):
+                    logging.debug(f"退出时检测到预期的异步清理异常（已忽略）: {e}")
+                else:
+                    logging.warning(f"清理资源时发生意外错误: {e}")
+            
+            # 最终状态清理
+            try:
+                # 给系统一点时间完成最后的清理
+                await asyncio.sleep(0.05)
+            except:
+                pass
+                
+        logging.info("程序退出")
+
+
+def run_main():
+    """运行主函数的包装器，处理事件循环相关的异常"""
+    try:
+        asyncio.run(main())
+    except KeyboardInterrupt:
+        logging.info("程序被用户中断")
+    except Exception as e:
+        error_msg = str(e).lower()
+        expected_errors = [
+            "cancel", "scope", "generatorexit", "runtimeerror",
+            "attempted to exit cancel scope", "different task"
+        ]
+        
+        if any(keyword in error_msg for keyword in expected_errors):
+            logging.debug(f"程序退出时的预期异常（已忽略）: {e}")
+        else:
+            logging.error(f"程序异常退出: {e}")
+
+
 if __name__ == "__main__":
-    asyncio.run(main())
+    run_main()

@@ -6,7 +6,7 @@ from mcp.server.fastmcp import FastMCP
 mcp = FastMCP("WriteServer")
 
 # Base directory for writing files. Override with env WRITE_BASE_DIR.
-BASE_DIR = os.path.abspath(os.getenv("WRITE_BASE_DIR") or os.path.join(os.path.dirname(__file__), "output"))
+BASE_DIR = os.path.abspath(os.getenv("WRITE_BASE_DIR") or os.path.join(os.path.dirname(__file__), "..", "output"))
 
 @mcp.tool()
 async def write_file(content: str, path: Optional[str] = None, filename: Optional[str] = None, overwrite: bool = False) -> str:
@@ -19,7 +19,7 @@ async def write_file(content: str, path: Optional[str] = None, filename: Optiona
     - 让用户直观地看到文件存储位置
 
     📁 存储规则：
-    - 默认写入目录：同目录下 output 子目录（可用环境变量 WRITE_BASE_DIR 覆盖）
+    - 默认写入目录：项目根目录下 output 子目录（可用环境变量 WRITE_BASE_DIR 覆盖）
     - path 若为相对路径，将被解析为相对于 BASE_DIR 的路径
     - path 可为目录或完整文件路径；若为目录需配合 filename，未提供则自动生成时间戳文件名
     - 为安全起见，最终写入路径必须位于 BASE_DIR 之下（防止路径穿越）
@@ -83,11 +83,10 @@ async def write_file(content: str, path: Optional[str] = None, filename: Optiona
         with open(full_path, "w", encoding="utf-8") as f:
             f.write(content)
 
-        # 计算文件大小并返回详细的文件信息
+        # 格式化返回信息，让用户直观看到文件位置
         size_bytes = os.path.getsize(full_path)
         abs_path = os.path.abspath(full_path)
         
-        # 格式化返回信息，让用户直观看到文件位置
         return f"""✅ 文件写入成功！
 
 📁 文件位置：{abs_path}

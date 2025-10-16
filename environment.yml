@@ -1,0 +1,14 @@
+name: mcp-proj
+channels:
+  - conda-forge
+  - defaults
+dependencies:
+  - python=3.10
+  - pip
+  - pip:
+    - httpx>=0.24.0
+    - python-dotenv>=1.0.0
+    - openai>=1.0.0
+    - mcp>=1.0.0
+    - fastmcp>=0.1.0
+    - psutil>=5.9.0

@@ -1,0 +1,14 @@
+{
+    "mcpServers": {
+      "weather": {
+        "command": "python",
+        "args": ["servers/weather_server.py"],
+        "description": "天气查询服务器，提供城市天气信息查询功能"
+      },
+      "write": {
+        "command": "python", 
+        "args": ["servers/write_server.py"],
+        "description": "文件写入服务器，将内容写入本地文件并返回绝对路径"
+      }
+    }
+}
